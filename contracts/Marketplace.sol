@@ -3,6 +3,289 @@
 pragma solidity 0.8.17;
 
 /**
+ * @dev String operations.
+ */
+library Strings {
+    bytes16 private constant _HEX_SYMBOLS = "0123456789abcdef";
+    uint8 private constant _ADDRESS_LENGTH = 20;
+
+    /**
+     * @dev Converts a 'uint256' to its ASCII 'string' decimal representation.
+     */
+    function toString(uint256 value) internal pure returns (string memory) {
+        // Inspired by OraclizeAPI's implementation - MIT licence
+        // https://github.com/oraclize/ethereum-api/blob/b42146b063c7d6ee1358846c198246239e9360e8/oraclizeAPI_0.4.25.sol
+
+        if (value == 0) {
+            return "0";
+        }
+        uint256 temp = value;
+        uint256 digits;
+        while (temp != 0) {
+            digits++;
+            temp /= 10;
+        }
+        bytes memory buffer = new bytes(digits);
+        while (value != 0) {
+            digits -= 1;
+            buffer[digits] = bytes1(uint8(48 + uint256(value % 10)));
+            value /= 10;
+        }
+        return string(buffer);
+    }
+
+    /**
+     * @dev Converts a 'uint256' to its ASCII 'string' hexadecimal representation.
+     */
+    function toHexString(uint256 value) internal pure returns (string memory) {
+        if (value == 0) {
+            return "0x00";
+        }
+        uint256 temp = value;
+        uint256 length = 0;
+        while (temp != 0) {
+            length++;
+            temp >>= 8;
+        }
+        return toHexString(value, length);
+    }
+
+    /**
+     * @dev Converts a 'uint256' to its ASCII 'string' hexadecimal representation with fixed length.
+     */
+    function toHexString(uint256 value, uint256 length) internal pure returns (string memory) {
+        bytes memory buffer = new bytes(2 * length + 2);
+        buffer[0] = "0";
+        buffer[1] = "x";
+        for (uint256 i = 2 * length + 1; i > 1; --i) {
+            buffer[i] = _HEX_SYMBOLS[value & 0xf];
+            value >>= 4;
+        }
+        require(value == 0, "Strings: hex length insufficient");
+        return string(buffer);
+    }
+
+    /**
+     * @dev Converts an 'address' with fixed length of 20 bytes to its not checksummed ASCII 'string' hexadecimal representation.
+     */
+    function toHexString(address addr) internal pure returns (string memory) {
+        return toHexString(uint256(uint160(addr)), _ADDRESS_LENGTH);
+    }
+}
+
+/**
+ * @dev Elliptic Curve Digital Signature Algorithm (ECDSA) operations.
+ *
+ * These functions can be used to verify that a message was signed by the holder
+ * of the private keys of a given address.
+ */
+library ECDSA {
+    enum RecoverError {
+        NoError,
+        InvalidSignature,
+        InvalidSignatureLength,
+        InvalidSignatureS,
+        InvalidSignatureV
+    }
+
+    function _throwError(RecoverError error) private pure {
+        if (error == RecoverError.NoError) {
+            return; // no error: do nothing
+        } else if (error == RecoverError.InvalidSignature) {
+            revert("ECDSA: invalid signature");
+        } else if (error == RecoverError.InvalidSignatureLength) {
+            revert("ECDSA: invalid signature length");
+        } else if (error == RecoverError.InvalidSignatureS) {
+            revert("ECDSA: invalid signature 's' value");
+        } else if (error == RecoverError.InvalidSignatureV) {
+            revert("ECDSA: invalid signature 'v' value");
+        }
+    }
+
+    /**
+     * @dev Returns the address that signed a hashed message (`hash`) with
+     * `signature` or error string. This address can then be used for verification purposes.
+     *
+     * The `ecrecover` EVM opcode allows for malleable (non-unique) signatures:
+     * this function rejects them by requiring the `s` value to be in the lower
+     * half order, and the `v` value to be either 27 or 28.
+     *
+     * IMPORTANT: `hash` _must_ be the result of a hash operation for the
+     * verification to be secure: it is possible to craft signatures that
+     * recover to arbitrary addresses for non-hashed data. A safe way to ensure
+     * this is by receiving a hash of the original message (which may otherwise
+     * be too long), and then calling {toEthSignedMessageHash} on it.
+     *
+     * Documentation for signature generation:
+     * - with https://web3js.readthedocs.io/en/v1.3.4/web3-eth-accounts.html#sign[Web3.js]
+     * - with https://docs.ethers.io/v5/api/signer/#Signer-signMessage[ethers]
+     *
+     * _Available since v4.3._
+     */
+    function tryRecover(bytes32 hash, bytes memory signature) internal pure returns (address, RecoverError) {
+        if (signature.length == 65) {
+            bytes32 r;
+            bytes32 s;
+            uint8 v;
+            // ecrecover takes the signature parameters, and the only way to get them
+            // currently is to use assembly.
+            /// @solidity memory-safe-assembly
+            assembly {
+                r := mload(add(signature, 0x20))
+                s := mload(add(signature, 0x40))
+                v := byte(0, mload(add(signature, 0x60)))
+            }
+            return tryRecover(hash, v, r, s);
+        } else {
+            return (address(0), RecoverError.InvalidSignatureLength);
+        }
+    }
+
+    /**
+     * @dev Returns the address that signed a hashed message (`hash`) with
+     * `signature`. This address can then be used for verification purposes.
+     *
+     * The `ecrecover` EVM opcode allows for malleable (non-unique) signatures:
+     * this function rejects them by requiring the `s` value to be in the lower
+     * half order, and the `v` value to be either 27 or 28.
+     *
+     * IMPORTANT: `hash` _must_ be the result of a hash operation for the
+     * verification to be secure: it is possible to craft signatures that
+     * recover to arbitrary addresses for non-hashed data. A safe way to ensure
+     * this is by receiving a hash of the original message (which may otherwise
+     * be too long), and then calling {toEthSignedMessageHash} on it.
+     */
+    function recover(bytes32 hash, bytes memory signature) internal pure returns (address) {
+        (address recovered, RecoverError error) = tryRecover(hash, signature);
+        _throwError(error);
+        return recovered;
+    }
+
+    /**
+     * @dev Overload of {ECDSA-tryRecover} that receives the `r` and `vs` short-signature fields separately.
+     *
+     * See https://eips.ethereum.org/EIPS/eip-2098[EIP-2098 short signatures]
+     *
+     * _Available since v4.3._
+     */
+    function tryRecover(
+        bytes32 hash,
+        bytes32 r,
+        bytes32 vs
+    ) internal pure returns (address, RecoverError) {
+        bytes32 s = vs & bytes32(0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
+        uint8 v = uint8((uint256(vs) >> 255) + 27);
+        return tryRecover(hash, v, r, s);
+    }
+
+    /**
+     * @dev Overload of {ECDSA-recover} that receives the `r and `vs` short-signature fields separately.
+     *
+     * _Available since v4.2._
+     */
+    function recover(
+        bytes32 hash,
+        bytes32 r,
+        bytes32 vs
+    ) internal pure returns (address) {
+        (address recovered, RecoverError error) = tryRecover(hash, r, vs);
+        _throwError(error);
+        return recovered;
+    }
+
+    /**
+     * @dev Overload of {ECDSA-tryRecover} that receives the `v`,
+     * `r` and `s` signature fields separately.
+     *
+     * _Available since v4.3._
+     */
+    function tryRecover(
+        bytes32 hash,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) internal pure returns (address, RecoverError) {
+        // EIP-2 still allows signature malleability for ecrecover(). Remove this possibility and make the signature
+        // unique. Appendix F in the Ethereum Yellow paper (https://ethereum.github.io/yellowpaper/paper.pdf), defines
+        // the valid range for s in (301): 0 < s < secp256k1n ÷ 2 + 1, and for v in (302): v ∈ {27, 28}. Most
+        // signatures from current libraries generate a unique signature with an s-value in the lower half order.
+        //
+        // If your library generates malleable signatures, such as s-values in the upper range, calculate a new s-value
+        // with 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141 - s1 and flip v from 27 to 28 or
+        // vice versa. If your library also generates signatures with 0/1 for v instead 27/28, add 27 to v to accept
+        // these malleable signatures as well.
+        if (uint256(s) > 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0) {
+            return (address(0), RecoverError.InvalidSignatureS);
+        }
+        if (v != 27 && v != 28) {
+            return (address(0), RecoverError.InvalidSignatureV);
+        }
+
+        // If the signature is valid (and not malleable), return the signer address
+        address signer = ecrecover(hash, v, r, s);
+        if (signer == address(0)) {
+            return (address(0), RecoverError.InvalidSignature);
+        }
+
+        return (signer, RecoverError.NoError);
+    }
+
+    /**
+     * @dev Overload of {ECDSA-recover} that receives the `v`,
+     * `r` and `s` signature fields separately.
+     */
+    function recover(
+        bytes32 hash,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) internal pure returns (address) {
+        (address recovered, RecoverError error) = tryRecover(hash, v, r, s);
+        _throwError(error);
+        return recovered;
+    }
+
+    /**
+     * @dev Returns an Ethereum Signed Message, created from a `hash`. This
+     * produces hash corresponding to the one signed with the
+     * https://eth.wiki/json-rpc/API#eth_sign[`eth_sign`]
+     * JSON-RPC method as part of EIP-191.
+     *
+     * See {recover}.
+     */
+    function toEthSignedMessageHash(bytes32 hash) internal pure returns (bytes32) {
+        // 32 is the length in bytes of hash,
+        // enforced by the type signature above
+        return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hash));
+    }
+
+    /**
+     * @dev Returns an Ethereum Signed Message, created from `s`. This
+     * produces hash corresponding to the one signed with the
+     * https://eth.wiki/json-rpc/API#eth_sign[`eth_sign`]
+     * JSON-RPC method as part of EIP-191.
+     *
+     * See {recover}.
+     */
+    function toEthSignedMessageHash(bytes memory s) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n", Strings.toString(s.length), s));
+    }
+
+    /**
+     * @dev Returns an Ethereum Signed Typed Data, created from a
+     * `domainSeparator` and a `structHash`. This produces hash corresponding
+     * to the one signed with the
+     * https://eips.ethereum.org/EIPS/eip-712[`eth_signTypedData`]
+     * JSON-RPC method as part of EIP-712.
+     *
+     * See {recover}.
+     */
+    function toTypedDataHash(bytes32 domainSeparator, bytes32 structHash) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+    }
+}
+
+/**
  * @title Counters
  * @author Matt Condon (@shrugs)
  * @dev Provides counters that can only be incremented, decremented or reset. This can be used e.g. to track the number
@@ -423,6 +706,84 @@ interface IERC2981 is IERC165 {
 }
 
 /**
+ * @dev Interface of the ERC20 standard as defined in the EIP.
+ */
+interface IERC20 {
+    /**
+     * @dev Emitted when `value` tokens are moved from one account (`from`) to
+     * another (`to`).
+     *
+     * Note that `value` may be zero.
+     */
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
+    /**
+     * @dev Emitted when the allowance of a `spender` for an `owner` is set by
+     * a call to {approve}. `value` is the new allowance.
+     */
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+
+    /**
+     * @dev Returns the amount of tokens in existence.
+     */
+    function totalSupply() external view returns (uint256);
+
+    /**
+     * @dev Returns the amount of tokens owned by `account`.
+     */
+    function balanceOf(address account) external view returns (uint256);
+
+    /**
+     * @dev Moves `amount` tokens from the caller's account to `to`.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     */
+    function transfer(address to, uint256 amount) external returns (bool);
+
+    /**
+     * @dev Returns the remaining number of tokens that `spender` will be
+     * allowed to spend on behalf of `owner` through {transferFrom}. This is
+     * zero by default.
+     *
+     * This value changes when {approve} or {transferFrom} are called.
+     */
+    function allowance(address owner, address spender) external view returns (uint256);
+
+    /**
+     * @dev Sets `amount` as the allowance of `spender` over the caller's tokens.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * IMPORTANT: Beware that changing an allowance with this method brings the risk
+     * that someone may use both the old and the new allowance by unfortunate
+     * transaction ordering. One possible solution to mitigate this race
+     * condition is to first reduce the spender's allowance to 0 and set the
+     * desired value afterwards:
+     * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
+     *
+     * Emits an {Approval} event.
+     */
+    function approve(address spender, uint256 amount) external returns (bool);
+
+    /**
+     * @dev Moves `amount` tokens from `from` to `to` using the
+     * allowance mechanism. `amount` is then deducted from the caller's
+     * allowance.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     */
+    function transferFrom(
+        address from,
+        address to,
+        uint256 amount
+    ) external returns (bool);
+}
+
+/**
  * @dev Implementation of the {IERC721Receiver} interface.
  *
  * Accepts all token transfers.
@@ -444,29 +805,153 @@ contract ERC721Holder is IERC721Receiver {
     }
 }
 
+contract SignatureChecker {
+    function _isValidSignature(
+        bytes32 hash,
+        bytes memory signature,
+        address account
+    ) internal pure returns (bool) {
+        (address signer, ) = ECDSA.tryRecover(hash, signature);
+        return signer == account;
+    }
+    
+    function _getHash(
+        address token,
+        uint256 tokenId,
+        address paymentToken,
+        uint256 price,
+        uint256 deadline
+    ) internal pure returns (bytes32) {
+        bytes32 hash = keccak256(abi.encodePacked(
+                token, 
+                tokenId, 
+                paymentToken, 
+                price, 
+                deadline
+            ));
+        return ECDSA.toEthSignedMessageHash(hash);
+    }
+}
+
+/* 
+* @title ERC20Support
+* @dev Implements the functionality of ERC20Support for Marketplace
+* @author Wisdom A. https://abkabioye.me
+* @notice Contract is not audited, use at your own risk
+*/
+contract ERC20Support is Ownable {
+    mapping(address => bool) private supportedERC20;
+
+    constructor() {
+        supportedERC20[address(0)] = true; // ETH
+    }
+
+    function addSupportedERC20(address _token) public onlyOwner {
+        supportedERC20[_token] = true;
+    }
+
+    function removeSupportedERC20(address _token) public onlyOwner {
+        supportedERC20[_token] = false;
+    }
+
+    function isSupportedERC20(address _token) public view returns (bool) {
+        return supportedERC20[_token];
+    }
+
+    modifier onlySupportedERC20(address _token) {
+        require(isSupportedERC20(_token), "Token not supported");
+        _;
+    }
+
+    function _transferERC20From(
+        address _token,
+        address _from,
+        address _to,
+        uint256 _amount
+    ) internal onlySupportedERC20(_token) {
+        // check for deflationary tokens
+        uint256 balanceBefore = IERC20(_token).balanceOf(_to);
+        IERC20(_token).transferFrom(_from, _to, _amount);
+        require(
+            IERC20(_token).balanceOf(_to) == balanceBefore + _amount,
+            "Amount transferred does not match"
+        );
+    }
+}
+
+contract RoyaltyManager {
+    bytes4 private constant _INTERFACE_ID_ERC2981 = 0x2a55205a;
+    // bytes4 private constant _INTERFACE_ID_ERC4494 = 0x5604e225;
+
+    function _checkRoyalties(address _contract) internal view returns (bool) {
+        (bool success) = IERC2981(_contract).supportsInterface(_INTERFACE_ID_ERC2981);
+        return success;
+    }
+
+    function getRoyaltyInfo(address tokenContract, uint tokenId, uint256 salePrice) public view returns (address, uint256) {
+        if (_checkRoyalties(tokenContract)) {
+            return IERC2981(tokenContract).royaltyInfo(tokenId, salePrice);
+        } else {
+            return (address(0), 0);
+        }
+    }
+}
+
+contract FeeManager is Ownable {
+    uint96 public constant MAX_FEE = 369; // 3.69% * feeBase
+    uint96 public constant _feeBase = 10000; // 100%
+    uint96 private _fee = 0; // 0.1% = 10
+    address payable private _feeReceiver;
+
+    constructor(address payable feeReceiver_, uint96 fee_) {
+        setFeeReceiver(feeReceiver_);
+        setFee(fee_);
+    }
+
+    function setFee(uint96 fee_) public onlyOwner {
+        require(fee_ <= MAX_FEE, "Max fee is 369 - 3.69%");
+        _fee = fee_;
+    }
+
+    function setFeeReceiver(address payable feeReceiver_) public onlyOwner {
+        require(feeReceiver_ != address(0), "Fee address cannot be zero address");
+        _feeReceiver = feeReceiver_;
+    }
+
+    function fee() public view returns (uint256) {
+        return _fee;
+    }
+
+    function feeReceiver() public view returns (address payable) {
+        return _feeReceiver;
+    }
+
+    function _payFeeETH(uint256 feeAmount) internal {
+        _feeReceiver.transfer(feeAmount);
+    }
+
+    function _payFeeERC20(address token, uint256 feeAmount) internal {
+        IERC20(token).transfer(_feeReceiver, feeAmount);
+    }
+
+    function _calculateFee(uint256 amount) internal view returns (uint256) {
+        return (amount * _fee) / _feeBase;
+    }
+}
+
 /* 
 * @title Marketplace
 * @dev Implements the functionality of a marketplace for NFTs
 * @author Wisdom A. https://abkabioye.me
 * @notice Contract is not audited, use at your own risk
 */
-contract ERC721Marketplace is Ownable, ReentrancyGuard {
+contract ERC721Marketplace is ERC20Support, FeeManager, RoyaltyManager, SignatureChecker, ReentrancyGuard {
     using Counters for Counters.Counter;
 
     Counters.Counter private _itemsSold;
 
     enum SaleType { Fixed, Auction }
     enum OrderSide { Buy, Sell }
-
-    struct MarketItem {
-        address payable seller;
-        uint256 price; // sale now price for auction and sale price for fixed
-        SaleType saleType;
-        uint256 startPrice; // for auction
-        uint256 duration; // for Auction
-        uint256 endsAt; // for Auction
-        bool priceMet; // for Auction
-    }
 
     struct Bid {
         address payable bidder;
@@ -477,41 +962,25 @@ contract ERC721Marketplace is Ownable, ReentrancyGuard {
         OrderSide side;
         address payable seller;
         address payable buyer;
-        address token;
-        uint256 tokenId;
-        uint256 price;        
+        address paymentToken; // address(0) for ETH
+        uint256 startPrice; // always 0 for fixed order
+        uint256 buyNowPrice;
+        uint256 duration; // always 0 for fixed order
         uint256 deadline;
     }
 
-    mapping(IERC721 => mapping(uint256 => MarketItem)) private _idToMarketItem;
+    mapping(IERC721 => mapping(uint256 => MarketOrder)) private _idToMarketItem;
     mapping(IERC721 => mapping(uint256 => Bid)) private _idToBid; // we keep only the highest bid
 
-    uint96 public constant MAX_FEE = 369; // 3.69% * feeBase
-    uint96 public fee = 0; // 0.1% = 10
-    uint96 public feeBase = 10000; // 100%
-    address payable public feeAddress;
+    constructor(address payable _feeAddress, uint96 _fee) FeeManager(_feeAddress, _fee) {}
 
-    bytes4 private constant _INTERFACE_ID_ERC2981 = 0x2a55205a;
-    // bytes4 private constant _INTERFACE_ID_ERC4494 = 0x5604e225;
-
-    constructor(address payable _feeAddress, uint96 _fee) {
-        setFeeAddress(_feeAddress);
-        setFee(_fee);
-    }
-
-    event NewFixedListing(
+    event NewListing(
         IERC721 indexed token,
         uint256 tokenId,
         address indexed seller,
-        uint256 price
-    );
-
-    event NewAuctionListing(
-        IERC721 indexed token,
-        uint256 tokenId,
-        address indexed seller,
-        uint256 startPrice,
-        uint256 endsAt
+        uint256 price,
+        address paymentToken,
+        SaleType saleType
     );
 
     event ListingCancelled(
@@ -535,250 +1004,536 @@ contract ERC721Marketplace is Ownable, ReentrancyGuard {
         uint256 price
     );
 
-    function getListing(IERC721 token, uint256 tokenId) public view returns (MarketItem memory) {
+    function getListing(
+        IERC721 token,
+        uint256 tokenId
+    ) public view returns (MarketOrder memory) {
         return _idToMarketItem[token][tokenId];
     }
 
-    function getBid(IERC721 token, uint256 tokenId) public view returns (Bid memory) {
+    function getBid(
+        IERC721 token,
+        uint256 tokenId
+    ) public view returns (Bid memory) {
         return _idToBid[token][tokenId];
     }
 
     /* 
-    * CREATE LISTING
+    * CREATE FIXED LISTING
+    * CREATE BATCH FIXED LISTING
+    * BUY WITH ETH OR ERC20
     */
-
-    /* 
-    * @param token - ERC721 token address
-    * @param tokenId - ERC721 token id
-    * @param price: buy now price
-    */
-    function createFixedListing(IERC721 token, uint256 tokenId, uint256 price) public {
+    function createFixedListing(
+        IERC721 token, 
+        uint256 tokenId, 
+        uint256 buyNowPrice,
+        address paymentToken
+    ) public onlySupportedERC20(paymentToken) {
         address sender = _msgSender();
-        require(token.ownerOf(tokenId) == sender, "You must be the owner of the token");
         require(_idToMarketItem[token][tokenId].seller == address(0), "Item is already on sale");
-        require(price > 0, "Start price must be at least 1 wei");
+        require(buyNowPrice > 0, "Price must be at least 1 wei");
 
-        token.transferFrom(sender, address(this), tokenId);
+        token.transferFrom(
+            sender, 
+            address(this), 
+            tokenId
+        );
 
-        _idToMarketItem[token][tokenId] = MarketItem({
+        _idToMarketItem[token][tokenId] = MarketOrder({
+            side: OrderSide.Sell,
             seller: payable(sender),
-            price: price,
-            saleType: SaleType.Fixed,
+            buyer: payable(address(0)),
+            paymentToken: paymentToken,
             startPrice: 0,
+            buyNowPrice: buyNowPrice,
             duration: 0,
-            endsAt: 0,
-            priceMet: false
+            deadline: 0
         });
 
-        emit NewFixedListing(token, tokenId, sender, price);
+        emit NewListing(
+            token, 
+            tokenId, 
+            sender, 
+            buyNowPrice, 
+            paymentToken, 
+            SaleType.Fixed
+        );
+    }
+
+    function bulkFixedListing(
+        IERC721 token, 
+        uint256[] calldata tokenIds,
+        uint256[] calldata buyNowPrices,
+        address[] calldata paymentTokens
+    ) external {
+        require(tokenIds.length == buyNowPrices.length, "Token Id and price must be same length");
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            createFixedListing(token, tokenIds[i], buyNowPrices[i], paymentTokens[i]);
+        }
+    }
+
+    function buyWithETH(
+        IERC721 token,
+        uint256 tokenId
+    ) public payable {
+        address sender = _msgSender();
+        uint incomingBidPrice = msg.value;
+
+        MarketOrder memory item = _idToMarketItem[token][tokenId];
+        require(item.seller != sender, "You cannot buy your own item");
+        require(item.duration == 0, "Item is not a fixed listing");
+        require(incomingBidPrice == item.buyNowPrice, "Incorrect price");
+        require(item.paymentToken == address(0), "Item is not an ETH listing");
+
+        _finaliseSale(
+            token, 
+            tokenId, 
+            item, 
+            Bid(
+                payable(sender), 
+                incomingBidPrice
+            )
+        );
+    }
+
+    function buyWithERC20(
+        IERC721 token,
+        uint256 tokenId
+    ) public nonReentrant {
+        address sender = _msgSender();
+        MarketOrder memory item = _idToMarketItem[token][tokenId];
+        require(item.seller != sender, "You cannot buy your own item");
+        require(item.duration == 0, "Item is not a fixed listing");
+
+        _transferERC20From(
+            item.paymentToken, 
+            sender, 
+            address(this),
+            item.buyNowPrice
+        );
+
+        _finaliseSale(
+            token, 
+            tokenId, 
+            item, 
+            Bid(
+                payable(sender), 
+                item.buyNowPrice
+            )
+        );
     }
 
     /* 
-    * @param token - ERC721 token address
-    * @param tokenId - ERC721 token id
-    * @param price: buy now price
-    * @param startPrice: starting price for auction
-    * @param duration: duration of auction in seconds
-     */
-    function createAuctionListing(IERC721 token, uint256 tokenId, uint256 price, uint256 startPrice, uint256 duration) public {
+    * CREATE AUCTION LISTING
+    * CREATE BATCH AUCTION LISTING
+    * BID WITH ETH OR ERC20
+    * ACCEPT BID
+    */
+    function createAuctionListing(
+        IERC721 token, 
+        uint256 tokenId, 
+        uint256 startPrice, 
+        uint256 buyNowPrice, 
+        uint256 duration,
+        address paymentToken
+    ) public onlySupportedERC20(paymentToken) {
         address sender = _msgSender();
-        require(token.ownerOf(tokenId) == sender, "You must be the owner of the token");
         require(_idToMarketItem[token][tokenId].seller == address(0), "Item is already on sale");
-        require(price > startPrice, "Buy now price must be higher than start price");
+        require(buyNowPrice > startPrice, "Buy now price must be higher than start price");
         require(duration > 0, "Duration must be greater than zero");
 
-        token.transferFrom(sender, address(this), tokenId);
+        token.transferFrom(
+            sender, 
+            address(this), 
+            tokenId
+        );
 
-        _idToMarketItem[token][tokenId] = MarketItem({
+        uint256 deadline = block.timestamp + duration;
+        _idToMarketItem[token][tokenId] = MarketOrder({
+            side: OrderSide.Sell,
             seller: payable(sender),
-            price: price,
-            saleType: SaleType.Auction,
+            buyer: payable(address(0)),
+            paymentToken: paymentToken,
             startPrice: startPrice,
-            endsAt: block.timestamp + duration,
+            buyNowPrice: buyNowPrice,
             duration: duration,
-            priceMet: false
+            deadline: deadline
         });
 
-        emit NewAuctionListing(token, tokenId, sender, startPrice, block.timestamp + duration);
+        emit NewListing(
+            token, 
+            tokenId, 
+            sender, 
+            startPrice, 
+            paymentToken,
+            SaleType.Auction
+        );
     }
 
-    function cancelListing(IERC721 token, uint256 tokenId) external {
-        address sender = _msgSender();
-        MarketItem memory item = _idToMarketItem[token][tokenId];
-        require(item.seller == sender, "You must be the seller of the token");
-        require(item.endsAt < block.timestamp, "Auction has not ended yet"); // fixed listing 'endsAt' is always 0
-    
-        delete _idToMarketItem[token][tokenId];
-        
-        token.transferFrom(address(this), item.seller, tokenId);
-        emit ListingCancelled(token, tokenId, sender);
-    }
+    function bulkAuction(
+        IERC721 token,
+        uint256[] calldata tokenIds,
+        uint256[] calldata startPrices,
+        uint256[] calldata buyNowPrices,
+        uint256[] calldata durations,
+        address[] calldata paymentTokens
+    ) external {
+        uint tokenIdLength = tokenIds.length;
 
-    function bulkFixedListing(IERC721[] calldata token, uint256[] calldata tokenId, uint256[] calldata price) external {
-        require(token.length == tokenId.length, "Token and tokenId must be same length");
-        require(token.length == price.length, "Token and price must be same length");
+        require(tokenIdLength == startPrices.length, "Token id and start prices must be same length");
+        require(tokenIdLength == buyNowPrices.length, "Token id and buy now prices must be same length");
+        require(tokenIdLength == durations.length, "Token id and duration must be same length");
+        require(tokenIdLength == paymentTokens.length, "Token id and payment token must be same length");
 
-        for (uint256 i = 0; i < token.length; i++) {
-            createFixedListing(token[i], tokenId[i], price[i]);
-        }
-    }
-    function bulkAuction(IERC721[] calldata token, uint256[] calldata tokenId, uint256[] calldata price, uint256[] calldata startPrice, uint256[] calldata duration) external {
-        require(token.length == tokenId.length, "Token and tokenId must be same length");
-        require(token.length == price.length, "Token and price must be same length");
-        require(token.length == startPrice.length, "Token and startPrice must be same length");
-        require(token.length == duration.length, "Token and duration must be same length");
-
-        for (uint256 i = 0; i < token.length; i++) {
-            createAuctionListing(token[i], tokenId[i], price[i], startPrice[i], duration[i]);
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            createAuctionListing(token, tokenIds[i], startPrices[i], buyNowPrices[i], durations[i], paymentTokens[i]);
         }
     }
 
-    /* 
-    * BID
-    */
-    function createBid(IERC721 token, uint256 tokenId) public payable {
+    function createBidETH(
+        IERC721 token, 
+        uint256 tokenId
+    ) public payable {
         address sender = _msgSender();
         uint incomingBidPrice = msg.value; // expected to be greater than the last bid or start price
-        MarketItem storage item = _idToMarketItem[token][tokenId];
+        MarketOrder memory item = _idToMarketItem[token][tokenId];
         
         require(item.seller != sender, "You cannot bid on your own item");
-        require(item.saleType == SaleType.Auction, "Item is not an auction");
-        require(item.endsAt > block.timestamp, "Auction has ended");
+        require(item.deadline > block.timestamp, "Auction has ended"); 
+        require(item.paymentToken == address(0), "Item is not an ETH auction");
 
-        uint256 lastBidPrice = item.startPrice;
-        Bid storage bid = _idToBid[token][tokenId];
-
-        if (bid.price > 0) {
-            lastBidPrice = bid.price;
-            bid.bidder.transfer(bid.price); // will be reverted if the incoming bid value is less than the current bid
-        }
+        Bid memory bid = _idToBid[token][tokenId];
+        uint256 lastBidPrice = bid.price != 0 ? bid.price : item.startPrice;
 
         require(incomingBidPrice > lastBidPrice, "Bid must be higher than the last bid");
 
-        if (
-            item.duration <= 24 hours &&
-            incomingBidPrice >= item.price
-        ) {
+        if (bid.bidder != address(0)) {
+            bid.bidder.transfer(bid.price);
+        }
+
+        // TODO: Fair bidding algorithm in the future
+        if (incomingBidPrice >= item.buyNowPrice) {
             // finalise auction immediately
-            _finaliseSale(token, tokenId, item, bid);
-        } else if (
-            item.duration > 24 hours &&
-            incomingBidPrice >= item.price &&
-            !item.priceMet
-        ) {
-            // this can only evaluate to true once
-            item.priceMet = true;
-            item.endsAt = block.timestamp + 24 hours; // extend auction by 24 hours for fair bidding
-            
-            bid.bidder = payable(sender);
-            bid.price = incomingBidPrice;
-            emit NewBid(token, tokenId, sender, incomingBidPrice);
-    
+            _finaliseSale(
+                token, 
+                tokenId, 
+                item, 
+                Bid({
+                    bidder: payable(sender), 
+                    price: incomingBidPrice
+                })
+            );
         } else {
-            bid.bidder = payable(sender);
-            bid.price = incomingBidPrice;
-            emit NewBid(token, tokenId, sender, incomingBidPrice);
+            _idToBid[token][tokenId] = Bid({
+                bidder: payable(sender),
+                price: incomingBidPrice
+            });
+            emit NewBid(
+                token, 
+                tokenId, 
+                sender, 
+                incomingBidPrice
+            );
         }
     }
     
+    function createBidERC20(
+        IERC721 token, 
+        uint256 tokenId, 
+        uint256 bidAmount
+    ) public nonReentrant {
+        address sender = _msgSender();
+        MarketOrder memory item = _idToMarketItem[token][tokenId];
+        
+        require(item.seller != sender, "You cannot bid on your own item");
+        require(item.deadline > block.timestamp, "Auction ended"); 
+    
+        Bid memory bid = _idToBid[token][tokenId];
+        uint256 lastBidPrice = bid.price != 0 ? bid.price : item.startPrice;
+
+        require(bidAmount > lastBidPrice, "Bid must be higher than the last bid");
+
+        _transferERC20From(
+            item.paymentToken,
+            sender, 
+            address(this), 
+            bidAmount 
+        );
+    
+        if (bid.bidder != address(0)) {
+            _transferERC20From(
+                item.paymentToken, 
+                address(this), 
+                bid.bidder, 
+                bid.price
+            );
+        }
+
+        // TODO: Fair bidding algorithm in the future
+        if (bidAmount >= item.buyNowPrice) {
+            // finalise auction immediately
+            _finaliseSale(
+                token, 
+                tokenId, 
+                item, 
+                Bid({
+                    bidder: payable(sender), 
+                    price: bidAmount
+                })
+            );
+        } else {
+            _idToBid[token][tokenId] = Bid({
+                bidder: payable(sender),
+                price: bidAmount
+            });
+            emit NewBid(
+                token, 
+                tokenId, 
+                sender, 
+                bidAmount
+            );
+        }
+    }
+    
+    // Accept bid if current bid satisfies the seller
+    function acceptBid(
+        IERC721 token, 
+        uint256 tokenId
+    ) public nonReentrant {
+        MarketOrder memory item = _idToMarketItem[token][tokenId];
+        require(item.seller == _msgSender(), "not seller");
+        require(item.duration != 0, "Not an auction");
+
+        Bid memory bid = _idToBid[token][tokenId];
+        require(bid.price > 0, "Zero bid");
+ 
+        _finaliseSale(
+            token, 
+            tokenId, 
+            item, 
+            bid
+        );
+    }
+
     /* 
     * Anyone can call this function to finalise an auction
     * This is useful if the auction has ended and the seller has not called acceptBid
     * Auction must have ended, and there must be a bid
     */
-    function finaliseAuction(IERC721 token, uint256 tokenId) public nonReentrant {
-        MarketItem memory item = _idToMarketItem[token][tokenId];
+    function finaliseAuction(
+        IERC721 token, 
+        uint256 tokenId
+    ) public nonReentrant {
+        MarketOrder memory item = _idToMarketItem[token][tokenId];
         Bid memory bid = _idToBid[token][tokenId];
         
-        require(item.saleType == SaleType.Auction, "Item is not an auction");
-        require(item.endsAt < block.timestamp, "Auction has not ended yet");
-        require(bid.price > 0, "No bids have been made");
+        require(item.deadline < block.timestamp, "Auction not ended");
+        require(bid.price > 0, "Zero bid");
         
-        _finaliseSale(token, tokenId, item, bid);
-    }
-
-    function acceptBid(IERC721 token, uint256 tokenId) public nonReentrant {
-        MarketItem memory item = _idToMarketItem[token][tokenId];
-        require(item.seller == _msgSender(), "You must be the seller of the token");
-        require(item.saleType == SaleType.Auction, "Item is not an auction");
-
-        Bid memory bid = _idToBid[token][tokenId];
-        require(bid.price > 0, "No bids for this item");
- 
-        _finaliseSale(token, tokenId, item, bid);
+        _finaliseSale(
+            token, 
+            tokenId, 
+            item, 
+            bid
+        );
     }
 
     /* 
-    * BUY NOW FOR FIXED LISTING
+    * CANCEL LISTING - Cannot cancel auction if there is a bid
     */
-    function buy(IERC721 token, uint256 tokenId) public payable nonReentrant {
+    function cancelListing(
+        IERC721 token, 
+        uint256 tokenId
+    ) external {
         address sender = _msgSender();
-        uint incomingBidPrice = msg.value;
+        MarketOrder memory item = _idToMarketItem[token][tokenId];
+        require(item.seller == sender, "not seller");
 
-        MarketItem memory item = _idToMarketItem[token][tokenId];
-        require(item.seller != sender, "You cannot buy your own item");
-        require(item.saleType == SaleType.Fixed, "Item is not a fixed listing");
-        require(incomingBidPrice == item.price, "Incorrect price");
-
-        _finaliseSale(token, tokenId, item, Bid(payable(sender), incomingBidPrice));
-    }
-
-    function getRoyaltyInfo(address tokenContract, uint tokenId, uint256 salePrice) public view returns (address, uint256) {
-        if (_checkRoyalties(tokenContract)) {
-            return IERC2981(tokenContract).royaltyInfo(tokenId, salePrice);
-        } else {
-            return (address(0), 0);
+        if (item.duration != 0) {
+            // item is an auction
+            // cannot cancel if there is a bid
+            require(_idToBid[token][tokenId].bidder == address(0), "Auction has a bid");
         }
+    
+        delete _idToMarketItem[token][tokenId];
+        delete _idToBid[token][tokenId];
+        token.transferFrom(
+            address(this), 
+            item.seller, 
+            tokenId
+        );
+        emit ListingCancelled(
+            token, 
+            tokenId, 
+            sender
+        );
     }
-
+    
     /* 
-    * Atomic buy, instant buy
+    * Atomic functions
+    * Offchain listing creation and order matching
     */
-    function atomicBuy(MarketOrder memory order, bytes memory signature) public payable nonReentrant {
+    // buyer executes offchain order signed by seller
+    function atomicBuyETH(
+        address token,
+        uint256 tokenId,
+        MarketOrder memory order,
+        bytes memory orderSignature, // order signature
+        bytes memory signature // permit signature
+    ) public payable nonReentrant {
         address sender = _msgSender();
         uint incomingBidPrice = msg.value;
 
         require(order.buyer == sender, "You must be the buyer of the token");
         require(order.side == OrderSide.Buy, "Wrong order side");
-        require(incomingBidPrice == order.price, "Incorrect price");
+        require(incomingBidPrice == order.buyNowPrice, "Incorrect price");
 
-        IERC721Permit(order.token).permit(
+        bool isValidSignature = _isValidSignature(
+            _getHash(
+                token,
+                tokenId,
+                order.paymentToken,
+                order.buyNowPrice,
+                order.deadline
+            ),
+            orderSignature,
+            order.seller
+        );
+
+        require(isValidSignature, "Invalid order signature");
+
+        IERC721Permit(token)
+        .permit(
             address(this), 
-            order.tokenId, 
+            tokenId, 
             order.deadline, 
             signature
         );
 
-        (address _royaltyAddress, uint256 _royaltyAmount) = getRoyaltyInfo(address(order.token), order.tokenId, order.price);
-        uint256 _mfee = _calculateFee(order.price);
-        uint256 _sellAmount = order.price - (_mfee + _royaltyAmount);
-       
-        IERC721(order.token).safeTransferFrom(
-            order.seller, 
-            order.buyer, 
-            order.tokenId
+        _finaliseSale(
+            IERC721(token), 
+            tokenId, 
+            order, 
+            Bid(
+                payable(sender), 
+                incomingBidPrice
+            )
         );
-        order.seller.transfer(_sellAmount);
-        feeAddress.transfer(_mfee);
-       
-        if (_royaltyAddress != address(0) && _royaltyAmount > 0) {
-            payable(_royaltyAddress).transfer(_royaltyAmount);
-        }
-        _itemsSold.increment();
-        emit NewSale(
-            IERC721(order.token), 
-            order.tokenId, 
-            order.seller, 
+    }
+
+    // buyer executes offchain order signed by seller
+    function atomicBuyERC20(
+        address token,
+        uint256 tokenId,
+        MarketOrder memory order,
+        bytes memory orderSignature, // order signature
+        bytes memory signature // permit signature
+    ) public nonReentrant onlySupportedERC20(order.paymentToken) {
+        address sender = _msgSender();
+
+        require(order.buyer == sender, "You must be the buyer of the token");
+        require(order.side == OrderSide.Buy, "Wrong order side");
+
+        bool isValidOrderSignature = _isValidSignature(
+            _getHash(
+                token,
+                tokenId,
+                order.paymentToken,
+                order.buyNowPrice,
+                order.deadline
+            ),
+            orderSignature,
+            order.seller
+        );
+
+        require(isValidOrderSignature, "Invalid order signature");
+
+        _transferERC20From(
+            order.paymentToken, 
+            sender, 
+            address(this), 
+            order.buyNowPrice
+        );
+
+        IERC721Permit(token)
+        .permit(
+            address(this), 
+            tokenId, 
+            order.deadline, 
+            signature
+        );
+
+        _finaliseSale(
+            IERC721(token), 
+            tokenId, 
+            order, 
+            Bid(
+                payable(sender),
+                 order.buyNowPrice
+            )
+        );
+    }
+
+    // Seller accepts offer from buyer's approval offchain
+    function atomicSellERC20(
+        address token,
+        uint256 tokenId,
+        MarketOrder memory order, 
+        bytes memory orderSignature // 
+    ) public nonReentrant {
+        address sender = _msgSender();
+
+        require(order.seller == sender, "You must be the seller of the token");
+        require(order.side == OrderSide.Sell, "Wrong order side");
+
+        bool isValidOrderSignature = _isValidSignature(
+            _getHash(
+                token,
+                tokenId,
+                order.paymentToken,
+                order.buyNowPrice,
+                order.deadline
+            ),
+            orderSignature,
+            order.buyer
+        );
+
+        require(isValidOrderSignature, "Invalid order signature");
+
+        _transferERC20From(
+            order.paymentToken, 
             order.buyer, 
-            order.price
+            address(this), 
+            order.buyNowPrice
+        );
+
+        IERC721(token)
+        .transferFrom(
+            sender, 
+            address(this), // could be sent to order.buyer to save gas but _finaliseSale will need to be modified
+            tokenId
+        );
+
+        _finaliseSale(
+            IERC721(token), 
+            tokenId, 
+            order, 
+            Bid(
+                payable(order.buyer), 
+                order.buyNowPrice
+            )
         );
     }
 
     /* 
-    * INTERNAL FUNCTIONS
+    * INTERNAL FUNCTION
     */    
-    function _finaliseSale(IERC721 token, uint256 tokenId, MarketItem memory item, Bid memory sale) internal {
-        
+    function _finaliseSale(
+        IERC721 token,
+        uint256 tokenId,
+        MarketOrder memory item,
+        Bid memory sale
+    ) internal {       
         delete _idToMarketItem[token][tokenId];
         delete _idToBid[token][tokenId];
 
@@ -787,35 +1542,40 @@ contract ERC721Marketplace is Ownable, ReentrancyGuard {
         uint256 _sellAmount = sale.price - (_mfee + _royaltyAmount);
         
         token.transferFrom(address(this), sale.bidder, tokenId);
-        item.seller.transfer(_sellAmount);
-        feeAddress.transfer(_mfee);
-        if (_royaltyAddress != address(0) && _royaltyAmount > 0) {
-            payable(_royaltyAddress).transfer(_royaltyAmount);
+        
+        if (item.paymentToken == address(0)) {
+            // payment in ETH
+            item.seller.transfer(_sellAmount);
+            _payFeeETH(_mfee);
+            if (_royaltyAddress != address(0) && _royaltyAmount > 0) {
+                payable(_royaltyAddress).transfer(_royaltyAmount);
+            }
+        } else {
+            // payment in ERC20
+            _transferERC20From(
+                item.paymentToken, 
+                address(this), 
+                item.seller, 
+                _sellAmount
+            );
+            _payFeeERC20(item.paymentToken, _mfee);
+            if (_royaltyAddress != address(0) && _royaltyAmount > 0) {
+                _transferERC20From(
+                    item.paymentToken, 
+                    address(this), 
+                    _royaltyAddress, 
+                    _royaltyAmount
+                );
+            }
         }
+
         _itemsSold.increment();
-        emit NewSale(token, tokenId, item.seller, sale.bidder, sale.price);
+        emit NewSale(
+            token, 
+            tokenId, 
+            item.seller, 
+            sale.bidder, 
+            sale.price
+        );
     }
-
-    function _checkRoyalties(address _contract) internal view returns (bool) {
-        (bool success) = IERC2981(_contract).supportsInterface(_INTERFACE_ID_ERC2981);
-        return success;
-    }
-
-    function _calculateFee(uint256 price) internal view returns (uint256) {
-        return (price * fee) / feeBase;
-    }
-
-    /* 
-    * ADMIN FUNCTIONS
-    */   
-    function setFee(uint96 _fee) public onlyOwner {
-        require( _fee <= MAX_FEE, "Max fee is 369 - 3.69%");
-        fee = _fee;
-    }
-
-    function setFeeAddress(address payable _receipient) public onlyOwner {
-        require(_receipient != address(0), "Fee address cannot be zero address");
-        feeAddress = _receipient;
-    } 
 }
-
