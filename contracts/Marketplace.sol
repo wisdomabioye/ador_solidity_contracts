@@ -1356,7 +1356,7 @@ contract ERC721Marketplace is ERC20Support, FeeManager, RoyaltyManager, Signatur
         }
     
         delete _idToMarketItem[token][tokenId];
-        delete _idToBid[token][tokenId];
+        // delete _idToBid[token][tokenId];
         token.transferFrom(
             address(this), 
             item.seller, 
