@@ -1177,6 +1177,53 @@ contract ERC721Marketplace is ERC20Support, FeeManager, RoyaltyManager, Signatur
         );
     }
 
+     function createFixedListingWithPermit(
+        IERC721 token, 
+        uint256 tokenId, 
+        uint256 buyNowPrice,
+        address paymentToken,
+        uint256 signatureDeadline,
+        bytes calldata signature
+    ) public onlySupportedERC20(paymentToken) {
+        address sender = _msgSender();
+        require(_idToMarketItem[token][tokenId].seller == address(0), "Item is already on sale");
+        require(buyNowPrice > 0, "Price must be at least 1 wei");
+
+        IERC721Permit(address(token))
+        .permit(
+            address(this), 
+            tokenId, 
+            signatureDeadline,
+            signature
+        );
+
+        token.transferFrom(
+            sender, 
+            address(this), 
+            tokenId
+        );
+
+        _idToMarketItem[token][tokenId] = MarketOrder({
+            side: OrderSide.Sell,
+            seller: payable(sender),
+            buyer: payable(address(0)),
+            paymentToken: paymentToken,
+            startPrice: 0,
+            buyNowPrice: buyNowPrice,
+            duration: 0,
+            deadline: 0
+        });
+
+        emit NewListing(
+            token, 
+            tokenId, 
+            sender, 
+            buyNowPrice, 
+            paymentToken, 
+            SaleType.Fixed
+        );
+    }
+
     function bulkFixedListing(
         IERC721 token, 
         uint256[] calldata tokenIds,
@@ -1258,6 +1305,57 @@ contract ERC721Marketplace is ERC20Support, FeeManager, RoyaltyManager, Signatur
         require(_idToMarketItem[token][tokenId].seller == address(0), "Item is already on sale");
         require(buyNowPrice > startPrice, "Buy now price must be higher than start price");
         require(duration > 0, "Duration must be greater than zero");
+
+        token.transferFrom(
+            sender, 
+            address(this), 
+            tokenId
+        );
+
+        uint256 deadline = block.timestamp + duration;
+        _idToMarketItem[token][tokenId] = MarketOrder({
+            side: OrderSide.Sell,
+            seller: payable(sender),
+            buyer: payable(address(0)),
+            paymentToken: paymentToken,
+            startPrice: startPrice,
+            buyNowPrice: buyNowPrice,
+            duration: duration,
+            deadline: deadline
+        });
+
+        emit NewListing(
+            token, 
+            tokenId, 
+            sender, 
+            startPrice, 
+            paymentToken,
+            SaleType.Auction
+        );
+    }
+
+    function createAuctionListingWithPermit(
+        IERC721 token, 
+        uint256 tokenId, 
+        uint256 startPrice, 
+        uint256 buyNowPrice, 
+        uint256 duration,
+        address paymentToken,
+        uint256 signatureDeadline,
+        bytes calldata signature
+    ) public onlySupportedERC20(paymentToken) {
+        address sender = _msgSender();
+        require(_idToMarketItem[token][tokenId].seller == address(0), "Item is already on sale");
+        require(buyNowPrice > startPrice, "Buy now price must be higher than start price");
+        require(duration > 0, "Duration must be greater than zero");
+        
+        IERC721Permit(address(token))
+        .permit(
+            address(this), 
+            tokenId, 
+            signatureDeadline,
+            signature
+        );
 
         token.transferFrom(
             sender, 
@@ -1494,9 +1592,9 @@ contract ERC721Marketplace is ERC20Support, FeeManager, RoyaltyManager, Signatur
     function atomicBuyETH(
         address token,
         uint256 tokenId,
-        MarketOrder memory order,
-        bytes memory orderSignature, // order signature
-        bytes memory signature // permit signature
+        MarketOrder calldata order,
+        bytes calldata orderSignature, // order signature
+        bytes calldata signature // permit signature
     ) public payable nonReentrant {
         address sender = _msgSender();
         uint incomingBidPrice = msg.value;
@@ -1521,14 +1619,14 @@ contract ERC721Marketplace is ERC20Support, FeeManager, RoyaltyManager, Signatur
 
         IERC721Permit(token)
         .permit(
-            address(this), 
+            address(this),
             tokenId, 
             order.deadline, 
             signature
         );
 
-        _finaliseSale(
-            IERC721(token), 
+        _atomicFinaliseSale(
+            IERC721(token),
             tokenId, 
             order, 
             Bid(
@@ -1542,9 +1640,9 @@ contract ERC721Marketplace is ERC20Support, FeeManager, RoyaltyManager, Signatur
     function atomicBuyERC20(
         address token,
         uint256 tokenId,
-        MarketOrder memory order,
-        bytes memory orderSignature, // order signature
-        bytes memory signature // permit signature
+        MarketOrder calldata order,
+        bytes calldata orderSignature, // order signature
+        bytes calldata signature // permit signature
     ) public nonReentrant onlySupportedERC20(order.paymentToken) {
         address sender = _msgSender();
 
@@ -1580,7 +1678,7 @@ contract ERC721Marketplace is ERC20Support, FeeManager, RoyaltyManager, Signatur
             signature
         );
 
-        _finaliseSale(
+        _atomicFinaliseSale(
             IERC721(token), 
             tokenId, 
             order, 
@@ -1592,11 +1690,11 @@ contract ERC721Marketplace is ERC20Support, FeeManager, RoyaltyManager, Signatur
     }
 
     // Seller accepts offer from buyer's approval offchain
-    function atomicSellERC20(
+    function executeOfferERC20(
         address token,
         uint256 tokenId,
-        MarketOrder memory order, 
-        bytes memory orderSignature // 
+        MarketOrder calldata order, 
+        bytes calldata orderSignature // 
     ) public nonReentrant {
         address sender = _msgSender();
 
@@ -1617,21 +1715,70 @@ contract ERC721Marketplace is ERC20Support, FeeManager, RoyaltyManager, Signatur
 
         require(isValidOrderSignature, "Invalid order signature");
 
+        // buyer/offerer must have approved this contract to transfer the paymentToken
         _transferERC20From(
             order.paymentToken, 
-            order.buyer, 
+            order.buyer,
             address(this), 
             order.buyNowPrice
         );
 
-        IERC721(token)
-        .transferFrom(
-            sender, 
-            address(this), // could be sent to order.buyer to save gas but _finaliseSale will need to be modified
-            tokenId
+        // seller must have approved this contract to transfer the tokenId
+        _atomicFinaliseSale(
+            IERC721(token), 
+            tokenId, 
+            order, 
+            Bid(
+                payable(order.buyer), 
+                order.buyNowPrice
+            )
+        );
+    }
+
+    function executeOfferWithPermitERC20(
+        address token,
+        uint256 tokenId,
+        MarketOrder calldata order, 
+        bytes calldata orderSignature, // order signature singed by buyer/offerer
+        bytes calldata signature // permit signature signed by seller
+    ) public nonReentrant {
+        address sender = _msgSender();
+
+        require(order.seller == sender, "You must be the seller of the token");
+        require(order.side == OrderSide.Sell, "Wrong order side");
+
+        bool isValidOrderSignature = _isValidSignature(
+            _getHash(
+                token,
+                tokenId,
+                order.paymentToken,
+                order.buyNowPrice,
+                order.deadline
+            ),
+            orderSignature,
+            order.buyer
         );
 
-        _finaliseSale(
+        require(isValidOrderSignature, "Invalid order signature");
+
+        // buyer/offerer must have approved this contract to transfer the paymentToken
+        _transferERC20From(
+            order.paymentToken, 
+            order.buyer,
+            address(this), 
+            order.buyNowPrice
+        );
+
+        // seller must have signed permit offchain
+        IERC721Permit(token)
+        .permit(
+            address(this), 
+            tokenId,
+            order.deadline,
+            signature
+        );
+
+        _atomicFinaliseSale(
             IERC721(token), 
             tokenId, 
             order, 
@@ -1658,7 +1805,55 @@ contract ERC721Marketplace is ERC20Support, FeeManager, RoyaltyManager, Signatur
         uint256 _mfee = _calculateFee(sale.price);
         uint256 _sellAmount = sale.price - (_mfee + _royaltyAmount);
         
-        token.transferFrom(address(this), item.seller, tokenId);
+        token.transferFrom(address(this), sale.bidder, tokenId);
+        
+        if (item.paymentToken == address(0)) {
+            // payment in ETH
+            item.seller.transfer(_sellAmount);
+            _payFeeETH(_mfee);
+            if (_royaltyAddress != address(0) && _royaltyAmount > 0) {
+                payable(_royaltyAddress).transfer(_royaltyAmount);
+            }
+        } else {
+            // payment in ERC20
+            _transferERC20From(
+                item.paymentToken, 
+                address(this), 
+                item.seller, 
+                _sellAmount
+            );
+            _payFeeERC20(item.paymentToken, _mfee);
+            if (_royaltyAddress != address(0) && _royaltyAmount > 0) {
+                _transferERC20From(
+                    item.paymentToken, 
+                    address(this), 
+                    _royaltyAddress, 
+                    _royaltyAmount
+                );
+            }
+        }
+
+        _itemsSold.increment();
+        emit NewSale(
+            token, 
+            tokenId, 
+            item.seller, 
+            sale.bidder, 
+            sale.price
+        );
+    }
+
+    function _atomicFinaliseSale(
+        IERC721 token,
+        uint256 tokenId,
+        MarketOrder memory item,
+        Bid memory sale
+    ) internal {       
+        (address _royaltyAddress, uint256 _royaltyAmount) = getRoyaltyInfo(address(token), tokenId, sale.price);
+        uint256 _mfee = _calculateFee(sale.price);
+        uint256 _sellAmount = sale.price - (_mfee + _royaltyAmount);
+        
+        token.transferFrom(item.seller, sale.bidder, tokenId);
         
         if (item.paymentToken == address(0)) {
             // payment in ETH
