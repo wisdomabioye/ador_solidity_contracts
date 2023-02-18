@@ -1658,7 +1658,7 @@ contract ERC721Marketplace is ERC20Support, FeeManager, RoyaltyManager, Signatur
         uint256 _mfee = _calculateFee(sale.price);
         uint256 _sellAmount = sale.price - (_mfee + _royaltyAmount);
         
-        token.transferFrom(address(this), sale.bidder, tokenId);
+        token.transferFrom(address(this), item.seller, tokenId);
         
         if (item.paymentToken == address(0)) {
             // payment in ETH
