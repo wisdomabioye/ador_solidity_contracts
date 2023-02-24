@@ -1740,7 +1740,8 @@ contract ERC721Marketplace is ERC20Support, FeeManager, RoyaltyManager, Signatur
         uint256 tokenId,
         MarketOrder calldata order, 
         bytes calldata orderSignature, // order signature singed by buyer/offerer
-        bytes calldata signature // permit signature signed by seller
+        bytes calldata signature, // permit signature signed by seller
+        uint256 signatureDeadline // permit signature deadline
     ) public nonReentrant {
         address sender = _msgSender();
 
@@ -1774,7 +1775,7 @@ contract ERC721Marketplace is ERC20Support, FeeManager, RoyaltyManager, Signatur
         .permit(
             address(this), 
             tokenId,
-            order.deadline,
+            signatureDeadline,
             signature
         );
 
