@@ -1330,6 +1330,15 @@ contract NFT1155 is ERC1155, Ownable {
     return _id;
   }
 
+  function create(address _initialOwner, uint256 _initialSupply, uint96 _royalty, bytes calldata _data) external onlyOwner returns (uint256) {
+    _tokenIds.increment();
+    uint256 _id = _tokenIds.current();
+    _mint(_initialOwner, _id, _initialSupply, _data);
+    _setTokenRoyalty(_id, _initialOwner, _royalty);
+    tokenSupply[_id] = _initialSupply;
+    return _id;
+  }
+
   /**
     * @dev Mints some amount of tokens to an address
     * @param _to          Address of the future owner of the token
