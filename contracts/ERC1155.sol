@@ -1323,6 +1323,10 @@ contract NFT1155 is ERC1155, Ownable {
     return tokenSupply[_id];
   }
 
+  function setURI(string memory newuri) public onlyOwner {
+    _setURI(newuri);
+  }
+
   /**
     * @dev Creates a new token type and assigns _initialSupply to an address
     * NOTE: remove onlyOwner if you want third parties to create new tokens on your contract (which may change your IDs)
