@@ -1766,9 +1766,4 @@ contract NFT721 is ERC721Permit, Ownable {
     function setDefaultRoyalty(uint96 defaultRoyalty_) public onlyOwner {
         _setDefaultRoyalty(owner(), defaultRoyalty_);
     }
-
-    function setTokenRoyalty(uint256 tokenId_, address royaltyReceiver_, uint96 royalty_) public {
-        require(ERC721.ownerOf(tokenId_) == _msgSender(), "ERC721: transfer from incorrect owner");
-        _setTokenRoyalty(tokenId_, royaltyReceiver_, royalty_);
-    }
 }
