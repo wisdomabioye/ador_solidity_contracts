@@ -1708,7 +1708,7 @@ contract NFT721 is ERC721Permit, Ownable {
         }
     }
 
-    function mint(address to_, uint96 royalty_) public returns (uint256) {
+    function mint(address to_, uint96 royalty_) public onlyOwner returns (uint256) {
         _tokenIds.increment();
 
         uint256 newItemId = _tokenIds.current();
@@ -1718,7 +1718,7 @@ contract NFT721 is ERC721Permit, Ownable {
         return newItemId;
     }
 
-    function mint(address to_) public returns (uint256) {
+    function mint(address to_) public onlyOwner returns (uint256) {
         _tokenIds.increment();
 
         uint256 newItemId = _tokenIds.current();
@@ -1726,7 +1726,7 @@ contract NFT721 is ERC721Permit, Ownable {
         return newItemId;
     }
 
-    function safeMint(address to) public returns (uint256) {
+    function safeMint(address to) public onlyOwner returns (uint256) {
         _tokenIds.increment();
 
         uint256 newItemId = _tokenIds.current();
@@ -1734,7 +1734,7 @@ contract NFT721 is ERC721Permit, Ownable {
         return newItemId;
     }
 
-    function batchMint(address to, uint256 amount) public {
+    function batchMint(address to, uint256 amount) public onlyOwner {
         for (uint256 i = 0; i < amount; i++) {
             _tokenIds.increment();
             uint256 newItemId = _tokenIds.current();
@@ -1742,7 +1742,7 @@ contract NFT721 is ERC721Permit, Ownable {
         }
     }
 
-    function batchSafeMint(address to, uint256 amount) public {
+    function batchSafeMint(address to, uint256 amount) public onlyOwner {
         for (uint256 i = 0; i < amount; i++) {
             _tokenIds.increment();
             uint256 newItemId = _tokenIds.current();

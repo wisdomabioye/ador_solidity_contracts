@@ -697,7 +697,7 @@ abstract contract ERC2981 is IERC2981, ERC165 {
         uint96 royaltyFraction;
     }
 
-    uint96 public constant MAX_ROYALTY = 1000; // 10%
+    uint96 public constant MAX_ROYALTY = 5000; // 50%
     RoyaltyInfo private _defaultRoyaltyInfo;
     mapping(uint256 => RoyaltyInfo) private _tokenRoyaltyInfo;
 
